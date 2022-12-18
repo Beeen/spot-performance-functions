@@ -17,7 +17,10 @@ const logging = new Logging({
 // app.use(express.static("."));
 // app.use(express.json());
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const stripe = require("stripe")("pk_test_51JWmMXAqPOYdz9ujfTkJ4VNx48TJX3Gtg1m8Pk41qNFMteqOepRHCOUMZQaTL00JZixm9HBTx7gIAzcb8U0PixDA00Hci4fj1w");
+import {Stripe} from "stripe";
+const stripe = new Stripe("sk_test_51JWmMXAqPOYdz9ujCOX6lUDX2l5BnXAEVElS4xh2zByzzTRJcp0EkSon3uVC2rN4kxT5IeqFhr4r4ZtTJnQ2lFKt00VydG1odp", {
+  apiVersion: "2022-11-15",
+});
 // This example sets up an endpoint using the Express framework.
 // Watch this video to get started: https://youtu.be/rPR2aJ6XnAc.
 
@@ -29,39 +32,14 @@ const stripe = require("stripe")("pk_test_51JWmMXAqPOYdz9ujfTkJ4VNx48TJX3Gtg1m8P
 //   response.send("Hello from Firebase!");
 // });
 
-// Take the text parameter passed to this HTTP endpoint and insert it into
-// Firestore under the path /messages/:documentId/original
-exports.addMessage = functions.https.onRequest(async (req, res) => {
-// Grab the text parameter.
-  const original = req.query.text;
-  // Push the new message into Firestore using the Firebase Admin SDK.
-  const writeResult = await admin.firestore().collection("messages").add({original: original});
-  // Send back a message that we've successfully written the message
-  res.json({result: `Message with ID: ${writeResult.id} added.`});
-});
-
-// Listens for new messages added to /messages/:documentId/original and creates an
-// uppercase version of the message to /messages/:documentId/uppercase
-exports.makeUppercase = functions.firestore.document("/messages/{documentId}")
-    .onCreate((snap, context) => {
-      // Grab the current value of what was written to Firestore.
-      const original = snap.data().original;
-
-      // Access the parameter `{documentId}` with `context.params`
-      functions.logger.log("Uppercasing", context.params.documentId, original);
-      const uppercase = original.toUpperCase();
-      // You must return a Promise when performing asynchronous tasks inside a Functions such as
-      // writing to Firestore.
-      // Setting an 'uppercase' field in Firestore document returns a Promise.
-      return snap.ref.set({uppercase}, {merge: true});
-    });
-
 /**
  * When a user is created, create a Stripe customer object for them.
  *
  * @see https://stripe.com/docs/payments/save-and-reuse#web-create-customer
  */
 exports.createStripeCustomer = functions.auth.user().onCreate(async (user) => {
+  console.log("Hello");
+  // console.log("Stripe Secret Key: " + functions.config().stripe.secret);
   const customer = await stripe.customers.create({email: user.email});
   const intent = await stripe.setupIntents.create({
     customer: customer.id,
@@ -115,11 +93,12 @@ exports.addPaymentMethodDetails = functions.firestore
 exports.createStripePayment = functions.firestore
     .document("stripe_customers/{userId}/payments/{pushId}")
     .onCreate(async (snap, context) => {
-      const {amount, currency, paymentMethod} = snap.data();
+      // eslint-disable-next-line camelcase
+      const {amount, currency, payment_method} = snap.data();
       try {
         // Look up the Stripe customer id.
         const parentRef = await snap!.ref!.parent!.parent!.get();
-        const customer = parentRef.data()!.customer_id;
+        const customer = parentRef.data()?.customer_id;
         // Create a charge using the pushId as the idempotency key
         // to protect against double charges.
         const idempotencyKey = context.params.pushId;
@@ -127,7 +106,8 @@ exports.createStripePayment = functions.firestore
           amount,
           currency,
           customer,
-          paymentMethod,
+          // eslint-disable-next-line camelcase
+          payment_method,
           off_session: false,
           confirm: true,
           confirmation_method: "manual",
@@ -170,7 +150,7 @@ exports.confirmStripePayment = functions.firestore
 exports.cleanupUser = functions.auth.user().onDelete(async (user) => {
   const dbRef = admin.firestore().collection("stripe_customers");
   const customer = (await dbRef.doc(user.uid).get()).data();
-  await stripe.customers.del(customer!.customer_id);
+  await stripe.customers.del(customer?.customer_id);
   // Delete the customers payments & payment methods in firestore.
   const batch = admin.firestore().batch();
   const paymetsMethodsSnapshot = await dbRef
@@ -252,3 +232,29 @@ function reportError(err: any, context = {}) {
 function userFacingMessage(error: any) {
   return error.type ? error.message : "An error occurred, developers have been alerted";
 }
+
+// Take the text parameter passed to this HTTP endpoint and insert it into
+// Firestore under the path /messages/:documentId/original
+// exports.addMessage = functions.https.onRequest(async (req, res) => {
+// // Grab the text parameter.
+//   const original = req.query.text;
+//   // Push the new message into Firestore using the Firebase Admin SDK.
+//   const writeResult = await admin.firestore().collection("messages").add({original: original});
+//   // Send back a message that we've successfully written the message
+//   res.json({result: `Message with ID: ${writeResult.id} added.`});
+// });
+
+// // Listens for new messages added to /messages/:documentId/original and creates an
+// // uppercase version of the message to /messages/:documentId/uppercase
+// exports.makeUppercase = functions.firestore.document("/messages/{documentId}").onCreate((snap, context) => {
+//   // Grab the current value of what was written to Firestore.
+//   const original = snap.data().original;
+
+//   // Access the parameter `{documentId}` with `context.params`
+//   functions.logger.log("Uppercasing", context.params.documentId, original);
+//   const uppercase = original.toUpperCase();
+//   // You must return a Promise when performing asynchronous tasks inside a Functions such as
+//   // writing to Firestore.
+//   // Setting an 'uppercase' field in Firestore document returns a Promise.
+//   return snap.ref.set({uppercase}, {merge: true});
+// });
