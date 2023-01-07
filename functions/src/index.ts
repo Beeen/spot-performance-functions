@@ -12,6 +12,8 @@ const logging = new Logging({
   projectId: process.env.GCLOUD_PROJECT,
 });
 
+process.env.FIREBASE_AUTH_EMULATOR_HOST = "localhost:9099";
+
 // const express = require("express");
 // const app = express();
 // app.use(express.static("."));

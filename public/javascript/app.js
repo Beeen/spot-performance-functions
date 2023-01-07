@@ -20,9 +20,9 @@ let customerData = {};
 /**
 * Firebase auth configuration
 */
-const auth = firebase.auth();
-auth.useEmulator("http://localhost:9099");
-const firebaseUI = new firebaseui.auth.AuthUI(auth);
+// const auth = firebase.auth();
+// auth.useAuthEmulator("http://localhost:9099");
+const firebaseUI = new firebaseUI.auth.AuthUI(firebase.auth());
 const firebaseUiConfig = {
   callbacks: {
     signInSuccessWithAuthResult: function (authResult, redirectUrl) {
